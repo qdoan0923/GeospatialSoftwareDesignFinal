@@ -1,0 +1,183 @@
+//This script illustrates the average temperature over the course of a year as a gif
+//It was inspired by https://developers.google.com/earth-engine/guides/ic_visualization
+//The first gif illustrates 2050
+//The second gif illustrates 2019
+//Read in minimum temperature data
+var coll = ee.ImageCollection('NASA/NEX-DCP30').select('tasmax');
+
+//Filter data by date so the pixel limit is not exceded
+
+var col = coll.filterDate('2050-01-01', '2051-01-01');
+
+//This script illustrates the collection points
+var yalepoint = ee.Geometry.Point([-72.114899 , 41.954655]);
+var dartmouthpoint = ee.Geometry.Point([ -72.249659 , 43.736577]);
+var smithpoint = ee.Geometry.Point([ -72.680123 , 42.447682]);
+
+//Take point geometries and turn them into circles with 10 km radius
+var yalecircle = yalepoint.buffer(10000,1);
+var dartmouthcircle = dartmouthpoint.buffer(10000,1);
+var smithcircle = smithpoint.buffer(10000,1);
+
+//Turn circle geomtries into a list of features
+var features = [
+ee.Feature(yalecircle),
+ee.Feature(dartmouthcircle),
+ee.Feature(smithcircle),
+];
+
+// Create a FeatureCollection from the list and print it.
+var mask = ee.FeatureCollection(features);
+
+
+// Define the regional bounds of animation frames.
+var region = ee.Geometry.Polygon(
+[[[-73.88158203097585,41.253638230561926],
+[-69.17943359347585,41.253638230561926],
+[-69.17943359347585,44.135491754127536],
+[-73.88158203097585,44.135491754127536]]],
+  null, false
+);
+
+//Group images by composite date
+col = col.map(function(img) {
+  var doy = ee.Date(img.get('system:time_start')).getRelative('day', 'year');
+  return img.set('doy', doy);
+});
+
+// Filter dates for the DOY match
+var distinctDOY = col.filterDate('2050-01-01', '2051-01-01');
+
+// Define a filter that identifies which images from the complete collection
+// match the DOY from the distinct DOY collection.
+var filter = ee.Filter.equals({leftField: 'doy', rightField: 'doy'});
+
+// Define a join.
+var join = ee.Join.saveAll('doy_matches');
+
+// Apply the join and convert the resulting FeatureCollection to an
+// ImageCollection.
+var joinCol = ee.ImageCollection(join.apply(distinctDOY, col, filter));
+
+// Apply median reduction among matching DOY collections.
+var comp = joinCol.map(function(img) {
+  var doyCol = ee.ImageCollection.fromImages(
+    img.get('doy_matches')
+  );
+  return doyCol.reduce(ee.Reducer.median());
+  
+});
+
+// Define RGB visualization parameters.
+var visParams = {
+  min: 260,
+  max: 300,
+  palette: [
+    'f5f7e2','b7c6b5', '5b8991','124f67','011c37'
+  ],
+};
+
+// Create RGB visualization images for use as animation frames.
+var rgbVis = comp.map(function(img) {
+  return img.visualize(visParams).clip(region);
+});
+
+// Define GIF visualization parameters.
+var gifParams = {
+  'region': region,
+  'dimensions': 150,
+  'crs': 'EPSG:3857',
+  'framesPerSecond': 3,
+  'bestEffort': true
+};
+
+// Print the GIF URL to the console.
+print(rgbVis.getVideoThumbURL(gifParams));
+
+// Render the GIF animation in the console.
+print(ui.Thumbnail(rgbVis, gifParams));
+
+// Create RGB visualization images for use as animation frames.
+var rgbVis2 = comp.map(function(img) {
+  return img.visualize(visParams).clip(mask);
+}); 
+
+// Print the GIF URL to the console.
+print(rgbVis2.getVideoThumbURL(gifParams));
+
+// Render the GIF animation in the console.
+print(ui.Thumbnail(rgbVis2, gifParams));
+
+//Read in minimum temperature data for 2019
+//Filter data by date so the pixel limit is not exceded
+var col = coll.filterDate('2019-01-01', '2020-01-01');
+
+//Group images by composite date
+col = col.map(function(img) {
+  var doy = ee.Date(img.get('system:time_start')).getRelative('day', 'year');
+  return img.set('doy', doy);
+});
+
+// Filter by date for the DOY match
+var distinctDOY = col.filterDate('2019-01-01', '2020-01-01');
+
+// Define a filter that identifies which images from the complete collection
+// match the DOY from the distinct DOY collection.
+var filter = ee.Filter.equals({leftField: 'doy', rightField: 'doy'});
+
+// Define a join.
+var join = ee.Join.saveAll('doy_matches');
+
+// Apply the join and convert the resulting FeatureCollection to an
+// ImageCollection.
+var joinCol = ee.ImageCollection(join.apply(distinctDOY, col, filter));
+
+// Apply median reduction among matching DOY collections.
+var comp = joinCol.map(function(img) {
+  var doyCol = ee.ImageCollection.fromImages(
+    img.get('doy_matches')
+  );
+  return doyCol.reduce(ee.Reducer.median());
+  
+});
+
+// Define RGB visualization parameters.
+var visParams = {
+  min: 260,
+  max: 300,
+  palette: [
+    'f5f7e2','b7c6b5', '5b8991','124f67','011c37'
+  ],
+};
+
+// Create RGB visualization images for use as animation frames.
+var rgbVis = comp.map(function(img) {
+  return img.visualize(visParams).clip(region);
+});
+
+// Define GIF visualization parameters.
+var gifParams = {
+  'region': region,
+  'dimensions': 150,
+  'crs': 'EPSG:3857',
+  'framesPerSecond': 3,
+  'bestEffort': true
+};
+
+// Print the GIF URL to the console.
+print(rgbVis.getVideoThumbURL(gifParams));
+
+// Render the GIF animation in the console.
+print(ui.Thumbnail(rgbVis, gifParams));
+
+// Create RGB visualization images for use as animation frames.
+var rgbVis2 = comp.map(function(img) {
+  return img.visualize(visParams).clip(mask);
+}); 
+
+  // Print the GIF URL to the console.
+print(rgbVis2.getVideoThumbURL(gifParams));
+
+
+// Render the GIF animation in the console.
+print(ui.Thumbnail(rgbVis2, gifParams));
