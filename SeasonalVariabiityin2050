@@ -1,0 +1,223 @@
+//This script shows the difference between the seasonal variation in 2005 and 2050
+//Read in temperature data
+//The data contains monthly daily temperature records from 1950 to 2005
+//Contains data projections from 2006 to 2099
+var colll = ee.ImageCollection('NASA/NEX-DCP30');
+var coll= colll.select('tasmin');
+
+//Filter data by date so the pixel limit is not exceded
+//Change dates if another year is of interest
+var col = coll.filterDate('2005-01-01', '2006-01-01');
+
+// Reduce the image to get a one-band minimum value image.
+// This shows the minimum temperature over the entire year at a point.
+var minValue = col.reduce(ee.Reducer.min());
+
+// Display the result.
+//Option to add the layer to the map
+//Map.addLayer(minValue, {min: 230, max: 320}, 'Min value image');
+
+//Read in minimum temperature data
+var coll2 = colll.select('tasmax');
+
+//Filter data by date so the pixel limit is not exceded
+//This date can be changes for another year of interest
+
+var col2 = coll2.filterDate('2005-01-01', '2006-01-01');
+
+// Reduce the image to get a one-band maximum value image.
+// This shows the maximum temperature over the entire year at a point
+var maxValue = col2.reduce(ee.Reducer.max());
+
+//Option to add the max value image to the map
+//Map.addLayer(maxValue, {min: 230, max: 320}, 'Max value image');
+
+// Compute temp difference
+var difference = maxValue.subtract(minValue);
+
+// Set parameters for visualization layer
+var visParams1 = {
+  min: 35,
+  max: 55,
+  palette: [
+    'f5f7e2','b7c6b5', '5b8991','124f67','011c37'
+  ],
+};
+
+// Option to add the layer to the map
+Map.addLayer(difference, visParams1, 'Temperature difference 2005');
+
+// Update the composite mask with the water mask.
+var visParams = {
+  min: 35,
+  max: 55,
+  palette: [
+    'f5f7e2','b7c6b5', '5b8991','124f67','011c37'
+  ],
+};
+
+//Add the masked image to the map
+var maskedComposite = difference.clip(mask);
+
+//This section will show how to find the difference in seasonal variation between
+//2005 and 2050
+
+//Filter data by date so the pixel limit is not exceded
+//Change dates if another year is of interest
+var cola = coll.filterDate('2050-01-01', '2051-01-01');
+
+// Reduce the image to get a one-band maximum value image.
+// This will show the minimum value over the entire year at one point. 
+var minValueA = cola.reduce(ee.Reducer.min());
+
+//Read in maximum temperature data
+var coll2a = colll.select('tasmax');
+
+//Filter data by date so the pixel limit is not exceded
+//This date can be changes for another year of interest
+var col2a = coll2a.filterDate('2050-01-01', '2051-01-01');
+
+// Reduce the image to get a one-band maximum value image.
+// This will show the maximum value over the entire year at one point.
+var maxValueA = col2a.reduce(ee.Reducer.max());
+
+//Option to add the max value image to the map
+//Map.addLayer(maxValue, {min: 230, max: 320}, 'Max value image');
+
+// Compute temp difference
+var differenceA = maxValueA.subtract(minValueA);
+
+// Set parameters for visualization layer
+var visParams1 = {
+  min: 35,
+  max: 55,
+  palette: [
+    'f5f7e2','b7c6b5', '5b8991','124f67','011c37'
+  ],
+};
+
+// Option to add the layer to the map
+Map.addLayer(differenceA, visParams1, 'Temperature difference image 2050');
+
+// Compute seasonal variability difference between 2005 and 2050
+var differenceTotal = differenceA.subtract(difference);
+
+// Set parameters for visualization layer
+var visParams2 = {
+  min: 0,
+  max: 10,
+  palette: [
+    'f5f7e2','b7c6b5', '5b8991','124f67','011c37'
+  ],
+};
+
+//Add layer to map which shows how much temperature variation changes between 2005 and 2050
+Map.addLayer(differenceTotal, visParams2, 'How the variation changes over decades');
+
+// This section shows how the max temperature in a year changes between 2005 and 2050
+// Compute temp difference
+var differenceMax = maxValueA.subtract(maxValue);
+
+// Add the layer to the map
+Map.addLayer(differenceMax, visParams2, 'How the max changes over decades');
+
+// This section adds the collection sites to the map
+// This script illustrates the collection points
+var yalepoint = ee.Geometry.Point([-72.114899 , 41.954655]);
+var dartmouthpoint = ee.Geometry.Point([ -72.249659 , 43.736577]);
+var smithpoint = ee.Geometry.Point([ -72.680123 , 42.447682]);
+
+//Take point geometries and turn them into circles with 10 km radius
+var yalecircle = yalepoint.buffer(10000,1);
+var dartmouthcircle = dartmouthpoint.buffer(10000,1);
+var smithcircle = smithpoint.buffer(10000,1);
+
+//Turn circle geomtries into a list of features
+var features = [
+ee.Feature(yalecircle),
+ee.Feature(dartmouthcircle),
+ee.Feature(smithcircle),
+];
+
+// Create a FeatureCollection from the list and print it.
+var mask = ee.FeatureCollection(features);
+
+// Paint the edges with different colors, display.
+// Create an empty image into which to paint the features, cast to byte.
+var empty = ee.Image().byte();
+
+// Outline the study areas
+var outline = empty.paint({
+  featureCollection: mask,
+  color: 1,
+  width: 3
+});
+Map.addLayer(outline, {palette: 'black'}, 'edges');
+
+
+// Process to add legend, 
+// from https://mygeoblog.com/2016/12/09/add-a-legend-to-to-your-gee-map/
+// set position of panel
+var legend = ui.Panel({
+  style: {
+    position: 'bottom-left',
+    padding: '8px 15px'
+  }
+});
+ 
+// Create legend title
+var legendTitle = ui.Label({
+  value: 'Temperature Variation',
+  style: {
+    fontWeight: 'bold',
+    fontSize: '18px',
+    margin: '0 0 4px 0',
+    padding: '0'
+    }
+});
+ 
+// Add the title to the panel
+legend.add(legendTitle);
+ 
+// Creates and styles 1 row of the legend.
+var makeRow = function(color, name) {
+ 
+      // Create the label that is the colored square box.
+      var colorBox = ui.Label({
+        style: {
+          backgroundColor: '#' + color,
+          // Use padding to give the box height and width.
+          padding: '8px',
+          margin: '0 0 4px 0'
+        }
+      });
+ 
+      // Create the label filled with the description text.
+      var description = ui.Label({
+        value: name,
+        style: {margin: '0 0 4px 6px'}
+      });
+ 
+      // return the panel
+      return ui.Panel({
+        widgets: [colorBox, description],
+        layout: ui.Panel.Layout.Flow('horizontal')
+      });
+};
+ 
+//  Define the palette for the colors
+var palette =['f5f7e2','011c37'];
+ 
+// Define the name of the colors for the legend
+var names = [
+  'Low',
+  'High'];
+ 
+// Add color and names
+for (var i = 0; i < 2; i++) {
+  legend.add(makeRow(palette[i], names[i]));
+  }  
+ 
+// add legend to map (alternatively you can also print the legend to the console)
+Map.add(legend);
+Map.centerObject(mask, 7);
