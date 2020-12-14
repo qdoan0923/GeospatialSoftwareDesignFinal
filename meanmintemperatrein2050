@@ -1,0 +1,230 @@
+//This script shows how temperature changes between 2005 and 2050
+//The temperature attribute of interest is the average minimum temperature through the year
+//Read in minimum temperature data
+//The data contains monthly daily temperature records from 1950 to 2005
+//Contains data projections from 2006 to 2099
+
+var colll = ee.ImageCollection('NASA/NEX-DCP30');
+var coll= colll.select('tasmin');
+
+//Filter data by date so the pixel limit is not exceded
+//For this section, read in the last dates which are recorded, not projections
+
+var col = coll.filterDate('2005-01-01', '2006-01-01');
+
+// Reduce the image to get a one-band minimum value image.
+var meanminValue = col.reduce(ee.Reducer.mean());
+
+//Filter data by date so the pixel limit is not exceded
+//Change dates if another year is of interest
+
+var col50 = coll.filterDate('2050-01-01', '2051-01-01');
+
+// Reduce the image to get a one-band mean minimum value image.
+var meanminValue50 = col50.reduce(ee.Reducer.mean());
+
+// Compute temp difference
+var difference = meanminValue50.subtract(meanminValue);
+
+// Set parameters for visualization layer
+var visParams1 = {
+  min: 270,
+  max: 290,
+  palette: [
+    'f5f7e2','b7c6b5', '5b8991','124f67','011c37'
+  ],
+};
+
+
+// Add layer of mean minimum value in 2005
+Map.addLayer(meanminValue, visParams1, 'mean minimum value 2005');
+
+// Add layer of mean minimum value in 2050
+Map.addLayer(meanminValue50, visParams1, 'mean minimum Value 2050');
+
+// Set parameters for visualization layer of difference
+var visParamsD = {
+  min: 0,
+  max: 4,
+  palette: [
+    'f5f7e2','b7c6b5', '5b8991','124f67','011c37'
+  ],
+};
+
+// Add layer of the change in Mean Min
+Map.addLayer(difference, visParamsD, 'difference between 2005 and 2050');
+
+//This section will create a feature collection of the collection sites
+//This script illustrates the collection points
+var yalepoint = ee.Geometry.Point([-72.114899 , 41.954655]);
+var dartmouthpoint = ee.Geometry.Point([ -72.249659 , 43.736577]);
+var smithpoint = ee.Geometry.Point([ -72.680123 , 42.447682]);
+
+//Take point geometries and turn them into circles with 10 km radius
+var yalecircle = yalepoint.buffer(10000,1);
+var dartmouthcircle = dartmouthpoint.buffer(10000,1);
+var smithcircle = smithpoint.buffer(10000,1);
+
+//Turn circle geomtries into a list of features
+var features = [
+ee.Feature(yalecircle),
+ee.Feature(dartmouthcircle),
+ee.Feature(smithcircle),
+];
+
+// Create a FeatureCollection from the list and print it.
+var mask = ee.FeatureCollection(features);
+
+// This section adds circles to display the collection sites
+// Create an empty image into which to paint the features, cast to byte.
+var empty = ee.Image().byte();
+
+// outline the study areas
+var outline = empty.paint({
+  featureCollection: mask,
+  color: 1,
+  width: 3
+});
+
+// Add the circles to the map
+Map.addLayer(outline, {palette: 'black'}, 'edges');
+
+//process to add legend, from https://mygeoblog.com/2016/12/09/add-a-legend-to-to-your-gee-map/
+//set position of panel
+var legend = ui.Panel({
+  style: {
+    position: 'bottom-left',
+    padding: '8px 15px'
+  }
+});
+ 
+//Create legend title
+var legendTitle = ui.Label({
+  value: 'Mean Mininimum Temperature',
+  style: {
+    fontWeight: 'bold',
+    fontSize: '18px',
+    margin: '0 0 4px 0',
+    padding: '0'
+    }
+});
+ 
+//Add the title to the panel
+legend.add(legendTitle);
+ 
+//Creates and styles 1 row of the legend.
+var makeRow = function(color, name) {
+ 
+      // Create the label that is the colored square box.
+      var colorBox = ui.Label({
+        style: {
+          backgroundColor: '#' + color,
+          // Use padding to give the box height and width.
+          padding: '8px',
+          margin: '0 0 4px 0'
+        }
+      });
+ 
+      // Create the label filled with the description text.
+      var description = ui.Label({
+        value: name,
+        style: {margin: '0 0 4px 6px'}
+      });
+ 
+      // return the panel
+      return ui.Panel({
+        widgets: [colorBox, description],
+        layout: ui.Panel.Layout.Flow('horizontal')
+      });
+};
+ 
+//  Define the palette for the colors
+var palette =['f5f7e2','011c37'];
+ 
+// Define the name of the colors for the legend
+var names = [
+  'Low',
+  'High'];
+ 
+// Add color and and names
+for (var i = 0; i < 2; i++) {
+  legend.add(makeRow(palette[i], names[i]));
+  }  
+ 
+// add legend to map
+Map.add(legend);
+
+//This section finds the areas with equal or less mean minimum value as the Yale site
+//Get mean value of minimum in the Yale collection area in 2005
+var meanReducer = ee.Reducer.mean();
+var yaleMean = meanminValue.reduceRegion({
+reducer: meanReducer, 
+geometry: yalecircle, 
+scale: 30,
+bestEffort: true
+});
+
+//Print the Yale collection site mean
+print(yaleMean);
+
+//Find the mean minimum temperature in the Smith collection region in 2005
+var meanReducer = ee.Reducer.mean();
+var smithMean = meanminValue.reduceRegion({
+reducer: meanReducer, 
+geometry: smithcircle, 
+scale: 30,
+bestEffort: true
+});
+
+//print the Smith collection site mean
+print(smithMean);
+
+//Find the mean minimum temperature in the Dartmouth collection site in 2005
+var meanReducer = ee.Reducer.mean();
+var dartmouthMean = meanminValue.reduceRegion({
+reducer: meanReducer, 
+geometry: dartmouthcircle, 
+scale: 30,
+bestEffort: true
+});
+
+//Print the Dartmouth collection site mean
+print(dartmouthMean);
+
+//Create a function that applies a binary value to the image
+//Pixels with a value greater than 276.316 in 2005 are assigned a value of one
+//Pixels with a value less than 276.316 are assigned a value of zero
+
+var presentmask = meanminValue.updateMask(meanminValue.gt(276.316))
+        // set all values with desired characteristics to 1
+        .gt(276.316).selfMask()
+        // rename the band
+        .rename('presentmask');
+
+//Add the mask to map which shows area with mean equal to or less than Yale
+Map.addLayer(presentmask, {palette: 'black'}, '2005 mean of Yale');
+
+//Get mean minimum temperature in the Yale collection area in 2050
+var meanReducer = ee.Reducer.mean();
+var yaleMean2 = meanminValue50.reduceRegion({
+reducer: meanReducer, 
+geometry: yalecircle, 
+scale: 30,
+bestEffort: true
+});
+
+//display the mean minimum temperature in 2050
+print(yaleMean2);
+
+//Pixels with a value less than 276.316 in 2050 are assigned a value of zero
+var presentmask2 = meanminValue50.updateMask(meanminValue50.gt(276.316))
+        // set all values with desired characteristics to 1
+        .gt(276.316).selfMask()
+        // rename the band
+        .rename('presentmask');
+        
+//Add the mask to the map
+Map.addLayer(presentmask2, {palette: 'black'}, 'Yale in 2050 overlay');
+
+//Center the map on the mask
+Map.centerObject(mask, 7);
